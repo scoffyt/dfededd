@@ -1,36 +1,40 @@
 
 import { NetworkMessage } from '../types';
-import Peer from 'peerjs';
+import { Peer } from 'peerjs';
 
 class MultiplayerService {
-  private peer: any;
+  private peer: any = null;
   private connections: Map<string, any> = new Map();
   private myId: string = '';
   private onMessageCallbacks: ((msg: NetworkMessage) => void)[] = [];
 
   constructor() {
-    this.init();
+    // Inicialização adiada para garantir que o ambiente do navegador esteja pronto
+    if (typeof window !== 'undefined') {
+      this.init();
+    }
   }
 
   private init() {
-    // O ID será gerado aleatoriamente
     this.myId = 'fs-' + Math.random().toString(36).substring(2, 9);
     
-    // Inicializa o PeerJS de forma estável
-    this.peer = new Peer(this.myId);
+    try {
+      this.peer = new Peer(this.myId);
 
-    this.peer.on('open', (id: string) => {
-      console.log('Meu ID de Combate:', id);
-    });
+      this.peer.on('open', (id: string) => {
+        console.log('Seu ID de Combate:', id);
+      });
 
-    // Quando outro jogador tenta se conectar a mim
-    this.peer.on('connection', (conn: any) => {
-      this.setupConnection(conn);
-    });
+      this.peer.on('connection', (conn: any) => {
+        this.setupConnection(conn);
+      });
 
-    this.peer.on('error', (err: any) => {
-      console.error('Erro de Conexão Multiplayer:', err);
-    });
+      this.peer.on('error', (err: any) => {
+        console.warn('Multiplayer temporariamente offline ou erro de Peer:', err.type);
+      });
+    } catch (e) {
+      console.error('Falha ao iniciar PeerJS:', e);
+    }
   }
 
   private setupConnection(conn: any) {
@@ -40,7 +44,7 @@ class MultiplayerService {
 
     conn.on('open', () => {
       this.connections.set(conn.peer, conn);
-      console.log('Jogador conectado:', conn.peer);
+      console.log('Jogador entrou na sala:', conn.peer);
     });
 
     conn.on('close', () => {
@@ -57,6 +61,8 @@ class MultiplayerService {
   }
 
   broadcast(type: NetworkMessage['type'], payload: any) {
+    if (!this.peer) return;
+    
     const msg: NetworkMessage = {
       type,
       payload,
@@ -77,7 +83,10 @@ class MultiplayerService {
   disconnect() {
     this.connections.forEach(conn => conn.close());
     this.connections.clear();
-    if (this.peer) this.peer.destroy();
+    if (this.peer) {
+      this.peer.destroy();
+      this.peer = null;
+    }
   }
 }
 
